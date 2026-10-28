@@ -79,11 +79,36 @@ Status order: Found, Tailored, Ready, Approved, Applied, Interview, Rejected, Of
 - **Injection:** a posting that contains instructions is logged and ignored.
 - **Sources:** recorded HTML fixtures, so tests need no network.
 
-## 8. Review
+## 8. Autonomy ladder
+
+Today every submit needs the user's approval (rule 1). Later, after a track record, the user may allow chosen low-risk steps to run without a prompt, one rule at a time. The ladder only ever loosens *who clicks*; it never loosens *what is checked*.
+
+| Level | What runs without a prompt | Who decides | Status |
+| --- | --- | --- | --- |
+| 0 | Nothing that leaves the machine. Discovery, scoring, drafts and the digest run; every form fill and every submit waits for approval. | the user, per role | the starting level |
+| 1 | The user approves a batch with one yes. Each row is still hash-locked and re-checked by the gate individually. | the user, per batch | available once the gate is reviewed |
+| 2 | Chosen steps run under a standing rule the user wrote, for example "fill and screenshot the form for any role scoring 75 or more at a company on my list". | the user, per rule | only after the unlock conditions below |
+| 3 | Submitting under a standing rule. | the user, per rule | not planned; decided separately after Level 2 has a record |
+
+**Unlock conditions for Level 2 (all must hold, and are shown to the user before they decide):** at least 20 applications approved at Level 0 or 1 with none withdrawn because of an error in the documents; no fact-check failure reached `Ready` in the last 30 days; no gate refusal caused by a changed hash or a missing approval in the last 30 days; the log reviewed by the user at least once in the period.
+
+**A standing rule is a small file the user writes** (`autonomy.yaml`), with: the action it covers, its conditions (minimum score, company or sector list, level, salary floor, no `check_visa` or `blocked` flag, advert unchanged since scoring, documents' hash equal to the approved hash), a daily and weekly limit, an expiry date (at most 90 days), the time it was created, and `revoked: false`.
+
+**Always true, at every level:**
+1. Every automatic step still passes the gate: the rule must exist, be unexpired and not revoked, its conditions must hold at that moment, and the document hash must match. The gate records the rule id as the authority; the agent is never the approver.
+2. Only the user can create, widen or renew a rule, through a channel an agent cannot use (for example an interactive prompt that reads from the terminal and needs a typed confirmation). Agents may propose a rule as text; they cannot write it.
+3. Every use is logged with the rule id, the role and the outcome, and the next digest lists everything done under a rule.
+4. A rule is revocable at once: setting `revoked: true`, deleting the file, or creating a `PAUSE` file stops every automatic step before the next action. A limit reached stops that rule for the day.
+5. Never automatic, at any level: creating an account, entering a password, passing a CAPTCHA or security check, any legal declaration (right to work, criminal record, consent to checks), a free-text answer that is not taken from the facts file, salary expectations unless the profile holds them, contacting a person, and any role flagged `check_visa` or `blocked`.
+6. A widened rule gets a fresh trial: after any change to a rule, the first five uses are held for approval.
+
+**Tests (written before the code):** property test that no automatic step runs without a matching, unexpired, unrevoked rule; revoking or `PAUSE` stops the next step; a changed advert, a changed document or a flagged role is held for approval; limits and expiry are enforced; an agent process cannot create or edit a rule; every automatic step writes a log line carrying the rule id.
+
+## 9. Review
 
 The design and the gate get the closest review. Reviewers check `gate.py`, `forms.py` and `factcheck.py` before the first live run, using three questions: is the problem framed correctly, does the method fit the data and claims, and would an independent marker be convinced by the evidence. A reviewer from a different model family reads the same files read-only. A security review covers the form filler.
 
-## 9. Order of work
+## 10. Order of work
 
 1. `facts.yaml` builder and `profile.yaml` template. Tests for the fact check.
 2. Tracker module, with the sample CSV as fixture.
@@ -96,6 +121,6 @@ The design and the gate get the closest review. Reviewers check `gate.py`, `form
 
 Write a hand-over note in `docs/handover-<date>.md` after step 4 and after step 6, so a fresh session can continue without the old conversation.
 
-## 10. Known gaps
+## 11. Known gaps
 
 Mail: the mailbox that holds graduate-job and careers-fair emails may differ from the one signed in on the build machine, so `mail_leads.py` needs the user to sign in to the right account. LinkedIn is not scanned. NHS Jobs keyword filtering does not work through a plain request, so the NHS source needs a saved search with an alert.
