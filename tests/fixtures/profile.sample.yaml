@@ -1,0 +1,14 @@
+# Sample profile. Every value is made up. The real profile.yaml is never committed.
+name: Alex Example
+email: alex.example@example.com
+phone: "+44 7700 900123"          # Ofcom drama-range number, not a real line
+location_city: Exampleton
+right_to_work:
+  status: "sample: has right to work without sponsorship"   # the user's own wording goes here
+  needs_sponsorship: false
+salary_floor_gbp: 30000
+preferred_cities: [London, Remote]
+sectors_to_avoid: [defence]
+referees: []                       # name, role, contact, and "permission: true" for each
+required_fields: [name, email, phone, right_to_work, salary_floor_gbp, preferred_cities]
+shortlist_threshold: 60

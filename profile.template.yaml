@@ -1,0 +1,18 @@
+# Profile template. Copy to profile.yaml and fill in your own answers.
+# profile.yaml is private and is never committed.
+# The agent refuses to run while any field named in required_fields is empty.
+name: ""
+email: ""
+phone: ""
+location_city: ""
+right_to_work:
+  status: ""                 # your own wording, for example how your right to work was granted
+  needs_sponsorship: null    # true or false; leave null until you have decided
+salary_floor_gbp: null
+preferred_cities: []
+sectors_to_avoid: []
+referees: []                 # name, role, contact, and "permission: true" for each
+# Facts marked [?] in master_facts.md may appear in a document only after you list their ids here.
+resolved_facts: []
+required_fields: [name, email, phone, right_to_work, salary_floor_gbp, preferred_cities]
+shortlist_threshold: 60

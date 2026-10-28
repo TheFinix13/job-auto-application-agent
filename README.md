@@ -4,7 +4,9 @@ An assistant that finds job adverts, scores how well each one fits a person's pr
 
 ## Status
 
-This project is at the specification stage. The design is written in [docs/AGENT_SPEC.md](docs/AGENT_SPEC.md), and sample inputs are in [examples/](examples/). The first build covers the profile and facts files, the tracker, de-duplication and the approval gate, with tests written first.
+The design is written in [docs/AGENT_SPEC.md](docs/AGENT_SPEC.md), and sample inputs are in [examples/](examples/). The first four build steps are in `src/job_agent/`: the facts file and fact checker, the profile, the tracker, de-duplication, and the approval gate, with 202 tests (`pip install -e .[dev]` then `pytest`). Discovery, tailoring and the form filler are not built yet.
+
+The approval gate is the only place a submit can happen, and it refuses unless every check passes. Known limits are stated rather than hidden: the gate records an approval but cannot prove who typed it, and it does not yet cover the answers typed into a form, only the CV and letter. Both are on the list before any real use.
 
 ## How it works
 

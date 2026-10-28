@@ -14,3 +14,7 @@ __pycache__/
 .venv/
 .DS_Store
 ~$*
+.hypothesis/
+.tracker.csv.lock
+.tracker.csv.snapshot.json
+*.egg-info/
