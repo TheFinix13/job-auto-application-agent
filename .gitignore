@@ -1,0 +1,16 @@
+# Real personal data never belongs here
+profile.yaml
+facts.yaml
+master_facts.md
+tracker.csv
+tracker.xlsx
+cv/
+logs/
+digest/
+.env
+*.log
+__pycache__/
+.pytest_cache/
+.venv/
+.DS_Store
+~$*
