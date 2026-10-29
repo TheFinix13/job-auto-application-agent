@@ -37,12 +37,13 @@ RESET_TARGETS = ("Found", "Tailored", "Ready")
 ACTORS = ("agent", "gate", "user", "human")  # "human" is only valid for update()
 STATUS_ACTORS = ("agent", "gate", "user")
 
-APPROVAL_COLUMNS = ("approved_by", "approved_at", "approved_doc_hash")
+APPROVAL_COLUMNS = ("approved_by", "approved_at", "approved_doc_hash", "approved_os_user")
 EXTRA_COLUMNS = (
     "flags",
     "human_edited_cols",
     "cv_path",
     "letter_path",
+    "answers_path",
     *APPROVAL_COLUMNS,
     "date_applied",
 )

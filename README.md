@@ -4,9 +4,9 @@ An assistant that finds job adverts, scores how well each one fits a person's pr
 
 ## Status
 
-The design is written in [docs/AGENT_SPEC.md](docs/AGENT_SPEC.md), and sample inputs are in [examples/](examples/). The first four build steps are in `src/job_agent/`: the facts file and fact checker, the profile, the tracker, de-duplication, and the approval gate, with 202 tests (`pip install -e .[dev]` then `pytest`). Discovery, tailoring and the form filler are not built yet.
+The design is written in [docs/AGENT_SPEC.md](docs/AGENT_SPEC.md), and sample inputs are in [examples/](examples/). The first four build steps are in `src/job_agent/`: the facts file and fact checker, the profile, the tracker, de-duplication, and the approval gate, with 267 tests (`pip install -e .[dev]` then `pytest`). Discovery, tailoring and the form filler are not built yet.
 
-The approval gate is the only place a submit can happen, and it refuses unless every check passes. Known limits are stated rather than hidden: the gate records an approval but cannot prove who typed it, and it does not yet cover the answers typed into a form, only the CV and letter. Both are on the list before any real use.
+The approval gate is the only place a submit can happen, and it refuses unless every check passes. The gate hashes the CV, the letter and the form answers together and submits exactly the bytes it hashed. The approve command needs a real terminal and a typed confirmation of company and role. Known limits are stated rather than hidden: a terminal and typed words are not authentication, and a program that can open a pseudo-terminal could pass them, so the checks make approval a deliberate, recorded act and not a proof of identity.
 
 ## How it works
 

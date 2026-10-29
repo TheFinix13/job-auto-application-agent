@@ -5,7 +5,8 @@ The condition, written out independently of the gate's own code:
     status == "Approved"
     AND approved_by == "user"
     AND approved_at holds a timestamp
-    AND the documents on disk are the ones that were approved
+    AND the CV, letter and form answers on disk are the ones that were approved
+    AND the row is not flagged submit_unconfirmed
 
 Two property tests check it.
 
@@ -23,6 +24,7 @@ Two property tests check it.
 """
 
 import csv
+import json
 import shutil
 import tempfile
 from datetime import datetime
@@ -39,7 +41,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 NOW = datetime.fromisoformat("2026-11-02T09:30:00+00:00")
 GOOD_TIMES = {"2026-11-02T09:30:00+00:00", "2026-11-02 09:30:00"}
 ROWS = ["S01", "S02", "S03"]
-CV, LETTER = "cv.txt", "letter.txt"
+CV, LETTER, ANSWERS = "cv.txt", "letter.txt", "answers.json"
 
 SAFE_TEXT = st.text(
     alphabet=st.characters(blacklist_categories=("Cs",), blacklist_characters="\x00\r\n\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029"),
@@ -52,15 +54,9 @@ class Recorder:
         self.base, self.rows_dir = base, rows_dir
         self.calls = []
 
-    def __call__(self, row):
-        folder = self.base / self.rows_dir(row["id"])
-        self.calls.append(
-            {
-                "row": dict(row),
-                "cv": (folder / CV).read_bytes() if (folder / CV).exists() else None,
-                "letter": (folder / LETTER).read_bytes() if (folder / LETTER).exists() else None,
-            }
-        )
+    def __call__(self, row, snapshot):
+        # What the submit step is given is the gate's verified copy, not whatever is on disk now.
+        self.calls.append({"row": dict(row), "cv": snapshot.cv, "letter": snapshot.letter, "answers": dict(snapshot.answers)})
         return True
 
 
@@ -76,7 +72,12 @@ def make_world(tmp: Path, row_ids):
             folder.mkdir(parents=True)
             (folder / CV).write_bytes(b"cv " + row_id.encode())
             (folder / LETTER).write_bytes(b"letter " + row_id.encode())
-            tx.update(row_id, {"cv_path": f"{row_id}/{CV}", "letter_path": f"{row_id}/{LETTER}"}, actor="agent")
+            (folder / ANSWERS).write_bytes(b'{"salary": 30000, "right_to_work": "' + row_id.encode() + b'"}')
+            tx.update(
+                row_id,
+                {"cv_path": f"{row_id}/{CV}", "letter_path": f"{row_id}/{LETTER}", "answers_path": f"{row_id}/{ANSWERS}"},
+                actor="agent",
+            )
     return tracker, base
 
 
@@ -117,7 +118,7 @@ HASH_MODES = st.one_of(st.just("correct"), st.just("correct"), st.sampled_from([
 DOC_CHANGES = st.one_of(
     st.just("none"),
     st.just("same_bytes"),
-    st.sampled_from(["cv", "letter", "both", "cv_deleted", "letter_deleted"]),
+    st.sampled_from(["cv", "letter", "both", "cv_deleted", "letter_deleted", "answers", "answers_deleted", "answers_reformatted"]),
 )
 FLAGS = st.one_of(st.just(""), st.just(""), st.sampled_from(["check_visa", "blocked", "submit_unconfirmed", "check_visa;submit_unconfirmed"]))
 
@@ -135,7 +136,7 @@ def test_submit_happens_exactly_when_the_conditions_hold(status, approved_by, ap
     tmp = Path(tempfile.mkdtemp())
     try:
         tracker, base = make_world(tmp, ["S01"])
-        good = hash_documents(base, "S01/" + CV, "S01/" + LETTER)
+        good = hash_documents(base, "S01/" + CV, "S01/" + LETTER, "S01/" + ANSWERS)
         stored = {"correct": good, "blank": "", "wrong": "sha256:" + "0" * 64, "recased": good.upper()}[hash_mode]
         edit_cells(
             tracker,
@@ -157,13 +158,20 @@ def test_submit_happens_exactly_when_the_conditions_hold(status, approved_by, ap
             cv.unlink()
         if doc_change == "letter_deleted":
             letter.unlink()
+        answers = base / "S01" / ANSWERS
+        if doc_change == "answers":
+            answers.write_bytes(b'{"salary": 31000, "right_to_work": "S01"}')
+        if doc_change == "answers_deleted":
+            answers.unlink()
+        if doc_change == "answers_reformatted":  # same answers, different layout and order
+            answers.write_bytes(b'{\n "right_to_work": "S01",\n "salary": 30000\n}')
 
         expected = (
             status == "Approved"
             and approved_by == "user"
             and approved_at in GOOD_TIMES
             and hash_mode == "correct"
-            and doc_change in ("none", "same_bytes")
+            and doc_change in ("none", "same_bytes", "answers_reformatted")
             and "submit_unconfirmed" not in flags
         )
 
@@ -195,7 +203,7 @@ class GateMachine(RuleBasedStateMachine):
         self.tracker, self.base = make_world(self.tmp, ROWS)
         self.gate = Gate(self.tracker, self.base, clock=lambda: NOW)
         self.recorder = Recorder(self.base, lambda row_id: row_id)
-        self.approved = {}  # row id -> (cv bytes, letter bytes, hash in the file) at the last successful approve
+        self.approved = {}  # row id -> (cv, letter, answers, hash in the file) at the last successful approve
         self.submitted = []
 
     def teardown(self):
@@ -229,7 +237,23 @@ class GateMachine(RuleBasedStateMachine):
     def a_document_is_written(self, row, name, content):
         self._doc(row, name).write_bytes(content)
 
-    @rule(row=st.sampled_from(ROWS), name=st.sampled_from([CV, LETTER]))
+    @rule(
+        row=st.sampled_from(ROWS),
+        content=st.sampled_from(
+            [
+                b'{"salary": 30000, "right_to_work": "S01"}',
+                b'{"salary": 31000, "right_to_work": "S01"}',
+                b'{"right_to_work": "S02", "salary": 30000}',
+                b'{"salary": 30000, "right_to_work": "S03"}',
+                b"{}",
+                b"not json",
+            ]
+        ),
+    )
+    def the_form_answers_are_written(self, row, content):
+        self._doc(row, ANSWERS).write_bytes(content)
+
+    @rule(row=st.sampled_from(ROWS), name=st.sampled_from([CV, LETTER, ANSWERS]))
     def a_document_is_deleted(self, row, name):
         self._doc(row, name).unlink(missing_ok=True)
 
@@ -243,7 +267,8 @@ class GateMachine(RuleBasedStateMachine):
         assert who == "user"
         record = {r["id"]: r for r in self.tracker.read()}[row]
         cv, letter = self._doc(row, CV).read_bytes(), self._doc(row, LETTER).read_bytes()
-        self.approved[row] = (cv, letter, record["approved_doc_hash"])
+        answers = json.loads(self._doc(row, ANSWERS).read_bytes())
+        self.approved[row] = (cv, letter, answers, record["approved_doc_hash"])
 
     @rule(row=st.sampled_from(ROWS))
     def the_user_sets_the_status_by_hand(self, row):
@@ -262,7 +287,7 @@ class GateMachine(RuleBasedStateMachine):
         if value == "RESTORE":
             if column != "approved_doc_hash" or row not in self.approved:
                 return
-            value = self.approved[row][2]
+            value = self.approved[row][3]
         edit_cells(self.tracker, row, **{column: value})
 
     @rule()
@@ -288,9 +313,10 @@ class GateMachine(RuleBasedStateMachine):
         assert seen["approved_by"] == "user"
         assert seen["approved_at"] in GOOD_TIMES
         assert row in self.approved, "submitted a row that was never approved through the gate"
-        cv, letter, stored_hash = self.approved[row]
+        cv, letter, answers, stored_hash = self.approved[row]
         assert seen["approved_doc_hash"] == stored_hash
         assert (call["cv"], call["letter"]) == (cv, letter), "documents differ from the approved version"
+        assert call["answers"] == answers, "form answers differ from the approved version"
 
     # -- checked after every step --
     @invariant()
